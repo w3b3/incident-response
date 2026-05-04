@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Incident Response — Architecture Principles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+
+/* ═══ TOKENS ══════════════════════════════════════════════════════════════════
+   https://design.w-b.dev · https://github.com/w3b3/design-system-w-b
+   ══════════════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#0e0e0e;
+  --bg2:#141414;
+  --fg:#f3f1ec;
+  --dim:rgba(243,241,236,0.35);
+  --dimmer:rgba(243,241,236,0.15);
+  --hair:rgba(243,241,236,0.08);
+  --accent:#d4a853;
+  --accent-dim:rgba(212,168,83,0.3);
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
+  --helv:Helvetica,"Helvetica Neue",Arial,sans-serif;
+}
+
+/* ═══ BASE ════════════════════════════════════════════════════════════════ */
+html{scroll-behavior:smooth;background:var(--bg);color:var(--fg);font-family:var(--helv)}
+body{background:var(--bg);overflow-x:hidden;-webkit-font-smoothing:antialiased}
+
+/* ═══ SECTIONS ════════════════════════════════════════════════════════════ */
+.section{
+  min-height:100vh;
+  padding:120px 60px;
+  opacity:0;transform:translateY(30px);
+  transition:opacity 0.7s ease,transform 0.7s ease;
+}
+.section.visible{opacity:1;transform:translateY(0)}
+.section-narrow{max-width:900px;margin:0 auto}
+.section-wide{max-width:1400px;margin:0 auto}
+
+/* ═══ TYPOGRAPHY ══════════════════════════════════════════════════════════ */
+h1{font-weight:700;font-size:clamp(42px,6vw,72px);letter-spacing:-0.04em;line-height:1.0}
+h2{font-weight:700;font-size:clamp(24px,3.5vw,40px);letter-spacing:-0.03em;line-height:1.1;margin-bottom:32px}
+h3{font-weight:700;font-size:clamp(18px,2.5vw,28px);letter-spacing:-0.02em;line-height:1.2;margin-bottom:16px}
+.label{font-family:var(--mono);font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--dim);margin-bottom:12px}
+.body{font-family:var(--helv);font-size:clamp(16px,1.6vw,19px);line-height:1.65;color:var(--dim);max-width:680px}
+.body strong{color:var(--fg);font-weight:600}
+.mono{font-family:var(--mono);font-size:13px;letter-spacing:0.02em;color:var(--dim)}
+.divider{width:40px;height:1px;background:var(--dimmer);margin:0 0 32px}
+
+/* ═══ FLOW CHAIN ══════════════════════════════════════════════════════════ */
+.flow-chain{display:flex;flex-direction:column;gap:0;margin:50px 0}
+.flow-step{display:flex;align-items:flex-start;gap:16px;padding:18px 20px;border-left:2px solid var(--hair);
+  opacity:0;transform:translateX(-20px);transition:all 0.5s ease}
+.visible .flow-step{opacity:1;transform:translateX(0)}
+.flow-step:nth-child(1){transition-delay:0.1s}
+.flow-step:nth-child(2){transition-delay:0.2s}
+.flow-step:nth-child(3){transition-delay:0.3s}
+.flow-step:nth-child(4){transition-delay:0.4s}
+.flow-step .step-icon{width:32px;height:32px;border-radius:50%;background:var(--bg2);border:1px solid var(--dimmer);
+  display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;color:var(--dim);flex-shrink:0;margin-top:2px}
+.flow-step .step-body{flex:1}
+.flow-step .step-label{font-family:var(--helv);font-weight:700;font-size:14px;margin-bottom:4px}
+.flow-step .step-desc{font-family:var(--mono);font-size:12px;color:var(--dim);line-height:1.55}
+.flow-step .step-desc code{font-family:var(--mono);font-size:11px;color:var(--fg);background:var(--bg);padding:1px 5px;border:1px solid var(--hair)}
+.flow-step.highlight{border-left-color:var(--accent)}
+.flow-step.highlight .step-icon{border-color:var(--accent);color:var(--accent)}
+.flow-step.highlight .step-label{color:var(--accent)}
+
+/* ═══ CARDS ═══════════════════════════════════════════════════════════════ */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:24px;margin:50px 0}
+.card{padding:24px;border:1px solid var(--hair);background:var(--bg2);
+  opacity:0;transform:translateY(20px);transition:all 0.6s ease}
+.visible .card{opacity:1;transform:translateY(0)}
+.visible .card:nth-child(1){transition-delay:0.1s}
+.visible .card:nth-child(2){transition-delay:0.2s}
+.visible .card:nth-child(3){transition-delay:0.3s}
+.visible .card:nth-child(4){transition-delay:0.4s}
+.card h4{font-family:var(--helv);font-weight:700;font-size:15px;letter-spacing:-0.01em;margin-bottom:10px}
+.card p{font-family:var(--mono);font-size:12px;color:var(--dim);line-height:1.55}
+.card.accent-card{border-color:var(--accent-dim)}
+.card.accent-card h4{color:var(--accent)}
+
+/* ═══ STACKED LAYERS ══════════════════════════════════════════════════════ */
+.layers{display:flex;flex-direction:column;gap:0;max-width:700px;margin:50px 0}
+.layer{padding:20px 24px;border:1px solid var(--hair);border-bottom:none;
+  opacity:0;transform:translateY(20px);transition:all 0.5s ease}
+.layer:last-child{border-bottom:1px solid var(--hair)}
+.visible .layer{opacity:1;transform:translateY(0)}
+.visible .layer:nth-child(1){transition-delay:0.15s}
+.visible .layer:nth-child(2){transition-delay:0.30s}
+.visible .layer:nth-child(3){transition-delay:0.45s}
+.visible .layer:nth-child(4){transition-delay:0.60s}
+.layer-name{font-family:var(--helv);font-weight:700;font-size:14px;margin-bottom:4px}
+.layer-desc{font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.55}
+.layer.hot{border-color:var(--accent-dim)}
+.layer.hot .layer-name{color:var(--accent)}
+
+/* ═══ MATURITY ════════════════════════════════════════════════════════════ */
+.maturity{margin:50px 0}
+.mat-level{display:flex;align-items:stretch;border-bottom:1px solid var(--hair);
+  opacity:0;transform:translateX(-20px);transition:all 0.5s ease}
+.visible .mat-level{opacity:1;transform:translateX(0)}
+.visible .mat-level:nth-child(1){transition-delay:0.1s}
+.visible .mat-level:nth-child(2){transition-delay:0.25s}
+.visible .mat-level:nth-child(3){transition-delay:0.4s}
+.visible .mat-level:nth-child(4){transition-delay:0.55s}
+.mat-num{width:60px;padding:16px 0;text-align:center;font-family:var(--helv);font-weight:700;font-size:20px;color:var(--dimmer);flex-shrink:0;letter-spacing:-0.02em}
+.mat-content{padding:16px;flex:1}
+.mat-content h4{font-family:var(--helv);font-weight:700;font-size:14px;margin-bottom:4px}
+.mat-content p{font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.4}
+.mat-level.current .mat-num{color:var(--accent)}
+.mat-level.current{border-left:3px solid var(--accent)}
+
+/* ═══ TOPOLOGY BOX ════════════════════════════════════════════════════════ */
+.topo-box{border:1px solid var(--hair);padding:28px;position:relative;margin:24px 0}
+.topo-box .topo-title{font-family:var(--mono);font-size:10px;letter-spacing:0.16em;text-transform:uppercase;
+  color:var(--dimmer);position:absolute;top:-8px;left:16px;background:var(--bg);padding:0 8px}
+.topo-items{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.topo-item{font-family:var(--mono);font-size:11px;padding:5px 12px;border:1px solid var(--dimmer);color:var(--dim)}
+.topo-item.hot{border-color:var(--accent-dim);color:var(--accent)}
+
+/* ═══ PIPELINE NODES ══════════════════════════════════════════════════════ */
+.node-row{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.node{width:64px;height:64px;border-radius:50%;border:2px solid var(--fg);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:9px;letter-spacing:0.06em;text-transform:uppercase}
+.node.filled{background:var(--fg);color:var(--bg)}
+.node.accent{border-color:var(--accent);color:var(--accent)}
+.node-arrow{font-family:var(--mono);color:var(--dimmer);font-size:16px}
+
+/* ═══ ANIMATIONS ══════════════════════════════════════════════════════════ */
+@keyframes breathe{0%,100%{opacity:0.3}50%{opacity:1}}
+.breathe{animation:breathe 2s ease infinite}
+
+/* ═══ RESPONSIVE ══════════════════════════════════════════════════════════ */
+@media(max-width:768px){
+  .section{padding:80px 24px}
+  .card-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ HERO ═══════════════════════════════════════════════════════════════ -->
+<section class="section" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;opacity:1;transform:none">
+  <div class="label">Architecture Reference // 2026</div>
+  <h1 style="margin:16px 0">Incident<br>Response</h1>
+  <p class="mono" style="margin-top:16px;max-width:480px;line-height:1.7">Cloud-native principles for any SaaS team that runs production systems.<br>8 domains &nbsp;&middot;&nbsp; 28 rules.</p>
+  <div class="node-row" style="justify-content:center;margin-top:48px">
+    <div class="node">DET</div>
+    <div class="node-arrow">&rarr;</div>
+    <div class="node filled">DEC</div>
+    <div class="node-arrow">&rarr;</div>
+    <div class="node accent">MIT</div>
+    <div class="node-arrow">&rarr;</div>
+    <div class="node">PIR</div>
+  </div>
+  <p class="mono" style="margin-top:16px;font-size:10px;letter-spacing:0.14em;color:var(--dimmer)">DETECT &nbsp;&middot;&nbsp; DECLARE &nbsp;&middot;&nbsp; MITIGATE &nbsp;&middot;&nbsp; REVIEW</p>
+</section>
+
+<!-- ═══ 01 FOUNDATION ══════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-narrow">
+    <div class="label">01 // Foundation</div>
+    <div class="divider"></div>
+    <h2>What incident response is actually for</h2>
+    <p class="body">In complex distributed systems, incidents are inevitable. The engineering quality of a team is not measured by whether incidents happen — it is measured by <strong>how fast and how well they respond</strong> when they do.</p>
+
+    <div class="layers">
+      <div class="layer hot">
+        <div class="layer-name">Incidents are normal. Failure to respond is not.</div>
+        <div class="layer-desc">High-performing teams have more incidents than poor ones — because they instrument better and declare sooner. The goal is not zero incidents. The goal is fast detection, fast mitigation, and learning that prevents recurrence.</div>
+      </div>
+      <div class="layer">
+        <div class="layer-name">Define "incident" before one occurs</div>
+        <div class="layer-desc">Without a shared definition, teams waste the first 10 minutes of every incident debating whether it is one. An incident is any unplanned event that impacts customers, violates an SLO, or requires coordination across more than one person to resolve.</div>
+      </div>
+      <div class="layer">
+        <div class="layer-name">Blameless culture is not optional</div>
+        <div class="layer-desc">When engineers fear blame, they delay escalation, hide information, and write sanitized post-mortems. Blame produces compliance theater. Blameless culture produces the honest timelines and systemic fixes that prevent recurrence.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 02 SEVERITY CLASSIFICATION ════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-narrow">
+    <div class="label">02 // Severity Classification</div>
+    <div class="divider"></div>
+    <h2>Severity is determined by customer impact, not system state</h2>
+    <p class="body">A database running at 100% CPU is not an incident if users are unaffected. A 2% failure rate on checkout affecting 500 paying customers is a SEV1. <strong>Customer impact is the only axis that matters.</strong> Attach concrete criteria and response SLAs to each level — vague thresholds cause delayed escalation.</p>
+
+    <div class="maturity">
+      <div class="mat-level current">
+        <div class="mat-num">SEV1</div>
+        <div class="mat-content">
+          <h4>Revenue-impacting, full outage, or data loss</h4>
+          <p>All hands. Acknowledge within 5 min, IC assigned within 15 min. Examples: checkout down, authentication broken, data breach in progress, full service outage.</p>
+        </div>
+      </div>
+      <div class="mat-level">
+        <div class="mat-num">SEV2</div>
+        <div class="mat-content">
+          <h4>Degraded but functional — significant customer impact</h4>
+          <p>Acknowledge within 15 min. SLO burning fast. Workaround may exist. Examples: elevated error rate on a core flow, intermittent failures, major feature unavailable for a subset of tenants.</p>
+        </div>
+      </div>
+      <div class="mat-level">
+        <div class="mat-num">SEV3</div>
+        <div class="mat-content">
+          <h4>Minor impact — workaround available, SLO not at risk</h4>
+          <p>Acknowledge within 1 hour. Business hours response acceptable. Examples: slow page, non-critical feature degraded, single tenant impacted with workaround.</p>
+        </div>
+      </div>
+      <div class="mat-level">
+        <div class="mat-num">SEV4</div>
+        <div class="mat-content">
+          <h4>No customer impact — internal or cosmetic</h4>
+          <p>Normal sprint process. No on-call page. Examples: a dashboard shows wrong data, a background job is slower than usual, an internal tool is unavailable.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 03 ROLES & COMMAND ═════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-narrow">
+    <div class="label">03 // Roles &amp; Command</div>
+    <div class="divider"></div>
+    <h2>A committee debugging together is not incident response</h2>
+    <p class="body">Every incident needs <strong>clear, named roles</strong> before the incident starts. When roles are invented in the moment, coordination collapses, communication stops, and the most senior engineer ends up doing everything.</p>
+
+    <div class="flow-chain">
+      <div class="flow-step highlight">
+        <div class="step-icon">IC</div>
+        <div class="step-body">
+          <div class="step-label">Incident Commander — coordinates, does not fix</div>
+          <div class="step-desc">The IC owns the overall response: assigns tasks, drives communication, makes scope decisions, and ensures the right people are in the room. The IC must not be in the technical weeds. A single IC per incident — no exceptions.</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-icon">TL</div>
+        <div class="step-body">
+          <div class="step-label">Technical Lead — investigates, reports up to IC</div>
+          <div class="step-desc">The TL digs into root cause, coordinates SMEs, and executes the mitigation plan. They report status to the IC at regular intervals. When the IC and TL are the same person, both roles degrade — the IC disappears into the problem and coordination stops.</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-icon">CL</div>
+        <div class="step-body">
+          <div class="step-label">Communications Lead — owns status page and stakeholders</div>
+          <div class="step-desc">The CL handles all external and executive communication: status page updates, customer emails, and stakeholder briefings. This role frees the IC and TL from communication overhead at the moment they need full focus on mitigation.</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-icon">OB</div>
+        <div class="step-body">
+          <div class="step-label">Observers go to a read-only channel</div>
+          <div class="step-desc">Every extra person in the active incident channel who is not contributing adds noise and slows decisions. Executives, stakeholders, and curious engineers observe in a separate read-only channel with regular IC updates. Keep the working channel small.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 04 COMMUNICATION ═══════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-narrow">
+    <div class="label">04 // Communication</div>
+    <div class="divider"></div>
+    <h2>Update the status page before customers tweet</h2>
+    <p class="body">Silence during an incident causes customers to file tickets, executives to escalate, and support queues to overflow — all of which add load at the worst moment. Communication is not a post-fix courtesy. <strong>It is an active mitigation tool.</strong></p>
+
+    <div class="flow-chain">
+      <div class="flow-step highlight">
+        <div class="step-icon">01</div>
+        <div class="step-body">
+          <div class="step-label">Status page within 15 minutes of a SEV1/SEV2</div>
+          <div class="step-desc">Even if the message is only "We are investigating an issue affecting checkout." Customers who see a status page update stop filing tickets. Customers who see nothing assume you don't know and escalate to sales, executives, and social media.</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-icon">02</div>
+        <div class="step-body">
+          <div class="step-label">Cadenced internal updates — not ad hoc</div>
+          <div class="step-desc">The IC posts a structured update every 15–30 minutes during a SEV1: current status, last action taken, next action, ETA if known. Cadence prevents the management question flood that derails technical work.</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-icon">03</div>
+        <div class="step-body">
+          <div class="step-label">Pre-write customer messaging templates</div>
+          <div class="step-desc">During an incident is the worst time to write from scratch. Maintain templates for: "investigating," "cause identified, working on fix," "mitigation in place, monitoring," and "resolved." Fill in the blanks — don't draft new copy under pressure.</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-icon">04</div>
+        <div class="step-body">
+          <div class="step-label">Right fidelity for the right audience</div>
+          <div class="step-desc">Engineering channel gets technical detail. Status page gets user-facing impact. Executive channel gets business impact and ETA only. Technical detail sent to executives wastes their time; vague impact sent to engineers wastes everyone's.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 05 TRIAGE & MITIGATION ════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-wide">
+    <div class="label">05 // Triage &amp; Mitigation</div>
+    <div class="divider"></div>
+    <h2>Restore service first. Understand why later.</h2>
+    <p class="body">The priority during an active incident is returning customers to a working state — not finding root cause. Understanding comes in the post-mortem. A rollback you don't fully understand is better than a fix you're still designing while users are impacted.</p>
+
+    <div class="card-grid">
+      <div class="card accent-card">
+        <h4>Mitigate first, understand later</h4>
+        <p>Root cause analysis is a post-incident activity. During the incident, the only question is: what action restores service fastest? Understanding what caused the failure comes after customers are unblocked, never during.</p>
+      </div>
+      <div class="card">
+        <h4>Rollback is the default recovery action</h4>
+        <p>If the last deployment correlates with the incident, roll it back immediately — before investigating. Feature flags, blue/green deploys, and canary releases exist specifically to make rollbacks fast and cheap. Maintain a deployment timeline inside every incident timeline.</p>
+      </div>
+      <div class="card">
+        <h4>Kill switches for every major feature</h4>
+        <p>Feature flags that disable expensive or failing functionality in seconds are a tier-1 incident tool. When a payment provider is failing, you need to disable it without a deploy. Kill switches must be tested outside of incidents — they are useless if discovered broken during one.</p>
+      </div>
+      <div class="card">
+        <h4>Time-box investigation before escalating</h4>
+        <p>If the on-call hasn't made progress toward mitigation within 30 minutes, they escalate — not continue debugging in isolation. Time-boxing forces escalation paths to be real, tested, and known. A single engineer blocking a SEV1 is an organizational failure, not a personal one.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 06 RUNBOOKS & PLAYBOOKS ═══════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-narrow">
+    <div class="label">06 // Runbooks &amp; Playbooks</div>
+    <div class="divider"></div>
+    <h2>Every alert is a question. The runbook is the answer.</h2>
+    <p class="body">An alert without a runbook sends the on-call engineer into an incident with no map. Runbooks don't need to be long — they need to exist, be accurate, and be <strong>linked directly from the alert</strong> so they are found in under 10 seconds at 3am.</p>
+
+    <div class="layers">
+      <div class="layer hot">
+        <div class="layer-name">Every alert links to a runbook — no exceptions</div>
+        <div class="layer-desc">A runbook must contain: what this alert means, the first 3 things to check, the rollback or kill switch procedure, escalation contact, and known false-positive conditions. It does not need to be comprehensive. It needs to exist and be correct.</div>
+      </div>
+      <div class="layer">
+        <div class="layer-name">Runbooks are maintained like code</div>
+        <div class="layer-desc">A runbook 18 months out of date is worse than none — it sends the on-call in the wrong direction with false confidence. Runbooks go stale when systems change. Review them after every incident in which they were used, and quarterly otherwise.</div>
+      </div>
+      <div class="layer">
+        <div class="layer-name">Game days make runbooks real</div>
+        <div class="layer-desc">Scheduled chaos exercises — injecting failures in a controlled environment — expose runbook gaps, broken escalation paths, and undocumented dependencies before a real incident does. Game days are not optional once you run production SaaS for paying customers.</div>
+      </div>
+    </div>
+
+    <div class="topo-box" style="margin-top:50px">
+      <span class="topo-title">Every runbook must contain</span>
+      <div class="topo-items">
+        <div class="topo-item hot">what this alert means</div>
+        <div class="topo-item hot">first 3 checks</div>
+        <div class="topo-item hot">rollback / kill switch</div>
+        <div class="topo-item">escalation contact</div>
+        <div class="topo-item">false positive criteria</div>
+        <div class="topo-item">related alerts</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 07 POST-MORTEM ═════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-wide">
+    <div class="label">07 // Post-Mortem</div>
+    <div class="divider"></div>
+    <h2>The incident ends at mitigation. The work begins after.</h2>
+    <p class="body">A post-mortem that produces no action items is documentation theater. A post-mortem that names an individual as the root cause is counterproductive. The goal is <strong>systemic understanding</strong> that prevents recurrence — and learnings that the whole organization can use.</p>
+
+    <div class="card-grid">
+      <div class="card accent-card">
+        <h4>Blameless by design</h4>
+        <p>People are never the root cause. Systems, processes, tooling, and conditions are. When engineers fear appearing in a post-mortem as the cause of an incident, they write sanitized timelines. Blameless culture is the only way to get the honest account needed to prevent recurrence.</p>
+      </div>
+      <div class="card">
+        <h4>Reconstruct a complete timeline</h4>
+        <p>The timeline runs from the first observable anomaly to full resolution. It is built from logs, deploy records, alert timestamps, and chat history — not from memory. Gaps in the timeline are gaps in observability. Every gap is a follow-up action item.</p>
+      </div>
+      <div class="card">
+        <h4>Every action item gets an owner and a deadline</h4>
+        <p>A post-mortem with no owners and no dates is a list of good intentions. Every contributing factor maps to a concrete remediation: a runbook update, a monitoring gap closed, a kill switch added, a process change. No owner and deadline means it does not happen.</p>
+      </div>
+      <div class="card">
+        <h4>Share post-mortems across the organization</h4>
+        <p>The learnings from one team's incident are often directly relevant to three other teams running similar systems. Post-mortems should be indexed, searchable, and accessible company-wide. Tribal knowledge locked inside one team prevents the organization from learning.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 08 ON-CALL HEALTH ════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-narrow">
+    <div class="label">08 // On-Call Health</div>
+    <div class="divider"></div>
+    <h2>Sustainable on-call is an engineering requirement, not a culture choice</h2>
+    <p class="body">A rotation that requires heroism to sustain will eventually fail. Alert fatigue, burnout, and turnover are direct, measurable costs of unsustainable on-call. <strong>On-call toil is a product defect</strong> — it belongs in the sprint backlog, not the "we'll get to it" list.</p>
+
+    <div class="layers">
+      <div class="layer hot">
+        <div class="layer-name">Track MTTD, MTTR, and pages per engineer per week</div>
+        <div class="layer-desc">Mean Time to Detect and Mean Time to Resolve are the KPIs of your incident response program. Pages per engineer per week is the proxy metric for on-call health. Without tracking them, improvements are invisible and regressions go unnoticed. Publish to the engineering org quarterly.</div>
+      </div>
+      <div class="layer">
+        <div class="layer-name">On-call rotation must be sustainable — not heroic</div>
+        <div class="layer-desc">Any engineer who gets paged more than 2–3 times outside business hours per week is accumulating a debt that compounds as fatigue. Rotations must be large enough to distribute load. An on-call that regularly pages at 3am is a system design problem that requires engineering, not endurance.</div>
+      </div>
+      <div class="layer">
+        <div class="layer-name">Structured handoff at every shift boundary</div>
+        <div class="layer-desc">Every on-call handoff covers: active incidents and their state, recent deploys that might surface issues, known risks scheduled in the next shift, and any alerts currently suppressed or in a noisy state. An oral-only or skipped handoff is a gap that guarantees a cold-start the next time something breaks.</div>
+      </div>
+      <div class="layer">
+        <div class="layer-name">On-call is a direct feedback loop into the product</div>
+        <div class="layer-desc">The engineer paged at 3am for a flaky integration has ground truth about product quality that no QA process replicates. On-call observations feed directly into sprint planning. Toil reduction is a product requirement — it improves reliability, reduces cost, and retains engineers.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ OUTRO ═══════════════════════════════════════════════════════════════ -->
+<section class="section" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;min-height:60vh">
+  <h2>The mental model</h2>
+  <p class="mono" style="margin-top:30px;max-width:560px;text-align:center;line-height:2.0">
+    Declare early. Assign roles immediately.<br>
+    Mitigate before you understand.<br>
+    Communicate before customers ask.<br>
+    Post-mortems find system failures, not people failures.<br>
+    On-call toil is a bug. Fix it in the sprint.
+  </p>
+  <a href="https://linkedin.com/in/brasileiro" target="_blank" rel="noopener"
+     style="display:inline-block;margin-top:60px;font-family:var(--mono);font-size:12px;letter-spacing:0.12em;color:var(--dim);text-decoration:none;border-bottom:1px solid var(--dimmer);padding-bottom:2px;transition:color 0.2s,border-color 0.2s"
+     onmouseover="this.style.color='var(--fg)';this.style.borderColor='var(--fg)'"
+     onmouseout="this.style.color='var(--dim)';this.style.borderColor='var(--dimmer)'">Daniel Brasileiro</a>
+</section>
+
+<!-- ═══ SCROLL OBSERVER ═════════════════════════════════════════════════════ -->
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) entry.target.classList.add('visible');
+  });
+}, { threshold: 0.15, rootMargin: '0px 0px -10% 0px' });
+document.querySelectorAll('.section').forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
